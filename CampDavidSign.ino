@@ -1,6 +1,6 @@
 #include "Tlc5940.h"
 
-int colorCorrection[] = {
+int colorLinearCorrection[] = {
           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
           0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
           0x02, 0x02, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x04, 0x04, 0x04, 0x04, 0x04, 0x05, 0x05, 0x05,
@@ -58,9 +58,9 @@ void setup()
 void setAllOff()
 {
   for (int i = 0; i < 9; i++)
-    Tlc.set(i, 4095);     
-  
-  setOn();
+    Tlc.set(i, 4095);   
+      
+  Tlc.update();
 }
 
 int to4095(int c)
@@ -76,13 +76,15 @@ void brightnessColor(Color basic, Color *newColor, int brightness)
   newColor->blue = basic.blue * brightness / 255;
 }
 
-void setStrip(Strip strip, Color color, int update = 0) //brightness should be between 0 to 255
+void setStrip(Strip strip, Color color, int update = 1) //brightness should be between 0 to 255
 {
   Tlc.set(strip.red,to4095(color.red));
   Tlc.set(strip.green,to4095(color.green));
   Tlc.set(strip.blue,to4095(color.blue));
-  if(update)
+  
+  if(update == 1)
     Tlc.update();
+  delay(1);
 }
 
 void fadeIn(Strip *strip)
@@ -91,16 +93,15 @@ void fadeIn(Strip *strip)
     if(strip->stage == 255)
     {
         setStrip(*strip, strip->color);
-        Tlc.update();
         strip->stage = -1;
         strip->process = NULL;
         strip->t = millis();
     }
     else if(strip->t < millis())
     {
-        brightnessColor(strip->color, &temp, colorCorrection[strip->stage]);
+        brightnessColor(strip->color, &temp, colorLinearCorrection[strip->stage]);
         setStrip(*strip, temp);
-        Tlc.update();
+      
         strip->t = millis() + (strip->length/255);
         strip->stage++;
     }
@@ -112,16 +113,16 @@ void fadeOut(Strip *strip)
     if(strip->stage == 255)
     {
         setStrip(*strip, off);
-        Tlc.update();
+        
         strip->stage = -1;
         strip->process = NULL;
         strip->t = millis();
     }
     else if(strip->t < millis())
     {
-        brightnessColor(strip->color, &temp, colorCorrection[255 - strip->stage]);
+        brightnessColor(strip->color, &temp, colorLinearCorrection[255 - strip->stage]);
         setStrip(*strip, temp);
-        Tlc.update();
+     
         strip->t = millis() + (strip->length/255);
          strip->stage++;
     }
@@ -132,14 +133,14 @@ void flickering(Strip *strip)
   if(strip->stage%3 == 0)
   {
     setStrip(*strip,strip->color);
-    Tlc.update();
+    
     strip->t = millis() + random(40,60);
     strip->stage++;
   }
   else if(strip->stage%3 == 1 &&  strip->t < millis()  )
   {
     setStrip(*strip,off);
-    Tlc.update();
+    
     if(strip->stage > strip->length*3 || strip->length > 20)
     {
       strip->stage = -1;
@@ -221,12 +222,11 @@ void setOn()
   waitTillProcessEnded(&iStrip);
   setFade(&iStrip, fadeIn, 3000);
   waitTillProcessEnded(&iStrip);
-  Tlc.update();
 }
 
 void setRandomColor()
 {
-   iStrip.color = (random(10) > 3)? firstColor: secondColor;
+   iStrip.color = (random(10) > 4)? firstColor: secondColor;
     davidStrip.color = iStrip.color;
    if(random(10) > 2)
       campStrip.color = (iStrip.color.red == secondColor.red && iStrip.color.green == secondColor.green && iStrip.color.blue == secondColor.blue)? firstColor: secondColor;
@@ -243,21 +243,24 @@ void loop()
   if(random(18) > 3) //just flickering
   {
     Serial.println("1");
-    setStrip(iStrip, off, 1);
-    setFlickering(&iStrip, random(2,3));
+    setStrip(iStrip, off); //turn off the strip
+    
+    setFlickering(&iStrip, random(3,5)); //flickring
     waitTillProcessEnded(&iStrip);
-    setStrip(iStrip, iStrip.color, 1);
+    setStrip(iStrip, iStrip.color);
     delay(random(300,500));
     setFlickering(&iStrip, random(2,3));
     waitTillProcessEnded(&iStrip);
-    setStrip(iStrip, iStrip.color, 1);
+    
+    setStrip(iStrip, iStrip.color); //turn on the strip
   }
   else
   {
     Serial.println("2");
+    
     setFade(&campStrip, fadeOut, 3000); //fade all out
-    waitTillProcessEnded(&campStrip);
-    delay(random(200,500));
+    waitTillallEnded(random(600,800));
+    
     setFade(&iStrip, fadeOut, 3000);
     setFade(&davidStrip, fadeOut, 3000);
     waitTillallEnded();
@@ -265,7 +268,7 @@ void loop()
     
     setRandomColor(); //get random color
     
-    setFlickering(&iStrip, 2); //flickering
+    setFlickering(&iStrip, 3); //flickering
     waitTillProcessEnded(&iStrip);
     
     delay(random(600,1500));
